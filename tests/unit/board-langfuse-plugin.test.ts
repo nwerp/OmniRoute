@@ -6,9 +6,9 @@ import assert from "node:assert/strict";
 const plugin = await import("../../examples/plugins/board-langfuse/index.mjs");
 
 const ENV = {
-  OMNIROUTE_PLUGIN_BOARD_LANGFUSE_BASE_URL: "http://langfuse.test/",
-  OMNIROUTE_PLUGIN_BOARD_LANGFUSE_PUBLIC_KEY: "pk-lf-test",
-  OMNIROUTE_PLUGIN_BOARD_LANGFUSE_SECRET_KEY: "sk-lf-test",
+  OMNIROUTE_PLUGIN_BOARD_LANGFUSE__BASE_URL: "http://langfuse.test/",
+  OMNIROUTE_PLUGIN_BOARD_LANGFUSE__PUBLIC_KEY: "pk-lf-test",
+  OMNIROUTE_PLUGIN_BOARD_LANGFUSE__SECRET_KEY: "sk-lf-test",
 };
 const realFetch = globalThis.fetch;
 let calls: Array<{ url: string; init: RequestInit }> = [];
@@ -18,7 +18,7 @@ function setEnv(on: boolean) {
     if (on) process.env[k] = v;
     else delete process.env[k];
   }
-  delete process.env.OMNIROUTE_PLUGIN_BOARD_LANGFUSE_REDACT;
+  delete process.env.OMNIROUTE_PLUGIN_BOARD_LANGFUSE__REDACT;
 }
 
 beforeEach(() => {
@@ -132,7 +132,7 @@ test("noLog keys are skipped and REDACT drops input and output", () => {
   plugin.onResponse({ requestId: "n1", response: { status: 200, data: {} } });
   assert.equal(calls.length, 0);
 
-  process.env.OMNIROUTE_PLUGIN_BOARD_LANGFUSE_REDACT = "true";
+  process.env.OMNIROUTE_PLUGIN_BOARD_LANGFUSE__REDACT = "true";
   plugin.onRequest({
     requestId: "red1",
     body: { messages: [{ role: "user", content: "secret" }] },
@@ -152,4 +152,19 @@ test("an error ends the call as an ERROR generation", () => {
   const a = attrs(calls[0]);
   assert.equal(a["langfuse.observation.level"], "ERROR");
   assert.equal(a["langfuse.observation.status_message"], "upstream 529");
+});
+
+test("calls that never finish are evicted by the size cap instead of piling up", () => {
+  const big = "x".repeat(900_000);
+  for (let i = 0; i < 60; i++) {
+    plugin.onRequest({
+      requestId: `stuck-${i}`,
+      body: { messages: [{ role: "user", content: big }] },
+    });
+  }
+  // 60 × ~0.9M chars is over the 32M cap: the oldest are gone, the newest still finishes.
+  plugin.onResponse({ requestId: "stuck-0", response: { status: 200, data: {} } });
+  assert.equal(calls.length, 0);
+  plugin.onResponse({ requestId: "stuck-59", response: { status: 200, data: {} } });
+  assert.equal(calls.length, 1);
 });

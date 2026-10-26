@@ -1,7 +1,7 @@
 {
   "name": "board-langfuse",
   "version": "1.0.0",
-  "description": "Exports one Langfuse generation per LLM call (OTLP/JSON, Langfuse v4 ingestion), in the shape the Board LLM traces viewer reads. Off until OMNIROUTE_PLUGIN_BOARD_LANGFUSE_BASE_URL, _PUBLIC_KEY and _SECRET_KEY are set.",
+  "description": "Exports one Langfuse generation per LLM call (OTLP/JSON, Langfuse v4 ingestion), in the shape the Board LLM traces viewer reads. Off until OMNIROUTE_PLUGIN_BOARD_LANGFUSE__BASE_URL, __PUBLIC_KEY and __SECRET_KEY are set.",
   "author": "nwerp",
   "license": "MIT",
   "main": "index.mjs",

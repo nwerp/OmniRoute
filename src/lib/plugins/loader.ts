@@ -439,13 +439,18 @@ export async function loadPlugin(
  * Uses allowlist approach — only pass explicitly safe vars.
  */
 /**
- * The env prefix a plugin with the `env` permission also receives: `OMNIROUTE_PLUGIN_`
- * plus its name in upper snake case (`board-langfuse` → `OMNIROUTE_PLUGIN_BOARD_LANGFUSE_`).
- * Plugin hooks get no config, so this is how a deployment hands a plugin its own settings
- * and secrets without exposing the rest of the server env to it.
+ * The env prefix a plugin with the `env` permission also receives: `OMNIROUTE_PLUGIN_`, its name
+ * in upper snake case, then `__` (`board-langfuse` → `OMNIROUTE_PLUGIN_BOARD_LANGFUSE__`).
+ * Plugin hooks get no config, so this is how a deployment hands a plugin its own settings and
+ * secrets without exposing the rest of the server env to it. The name part never contains `__`,
+ * so one plugin's prefix (`BOARD__`) cannot match another's variables (`BOARD_LANGFUSE__…`).
  */
 export function pluginEnvPrefix(pluginName: string): string {
-  return `OMNIROUTE_PLUGIN_${pluginName.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_`;
+  const token = pluginName
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return `OMNIROUTE_PLUGIN_${token}__`;
 }
 
 export function getFilteredEnv(permissions: Permission[], pluginName = ""): Record<string, string> {
