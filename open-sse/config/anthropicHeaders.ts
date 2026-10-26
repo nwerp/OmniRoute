@@ -307,6 +307,10 @@ export const FORWARDABLE_CLIENT_BETAS = Object.freeze([
   "thinking-display-updates-2026-08-18",
   "dangerous-tool-use-2026-09-03",
   "afk-mode-2026-01-31",
+  // Claude Code 2.1.310 sends both on every request; dropping them silently turns off
+  // per-turn thinking token counts and mid-conversation tool changes.
+  "thinking-token-count-2026-05-13",
+  "mid-conversation-tool-changes-2026-07-01",
   "timing-2026-09-09",
   "inline-tools-2026-09-15",
   // Top-level `thread` {type:create|continue,previous_message_id} (#15705), captured from

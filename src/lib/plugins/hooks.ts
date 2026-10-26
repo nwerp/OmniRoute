@@ -284,6 +284,10 @@ export type PluginOnStreamCompletePayload = {
   model?: string;
   provider?: string;
   errorCode?: string;
+  /** The assembled client-facing response of the stream, when chatCore built one. */
+  responseBody?: unknown;
+  /** USD estimate of the call (`calculateCost`), when usage is known. */
+  costUsd?: number;
 };
 
 /**

@@ -279,3 +279,39 @@ test("onStreamComplete: errorCode is passed through when provided", async () => 
   assert.equal(captured!.model, "grok-3");
   assert.equal(captured!.provider, "xai");
 });
+
+test("onStreamComplete carries the assembled response body when chatCore built one", async () => {
+  let captured: Record<string, unknown> | undefined;
+  registerHook("onStreamComplete", "test-onstreamcomplete-plugin", async (payload: Record<string, unknown>) => {
+    captured = payload;
+  });
+  const responseBody = { id: "msg_1", content: [{ type: "text", text: "hello" }] };
+
+  await runPluginOnStreamCompleteHook({
+    status: 200,
+    usage: { prompt_tokens: 3, completion_tokens: 1 },
+    model: "claude-haiku-5-5",
+    provider: "claude",
+    startTime: Date.now(),
+    requestId: "req-stream-body",
+    responseBody,
+  });
+
+  await waitFor(() => captured !== undefined);
+  assert.equal(captured!.requestId, "req-stream-body");
+  assert.deepEqual(captured!.responseBody, responseBody);
+  // The cost is an estimate from the pricing table: a number when priced, absent otherwise.
+  assert.ok(captured!.costUsd === undefined || typeof captured!.costUsd === "number");
+});
+
+test("onStreamComplete without a body keeps the old payload shape", async () => {
+  let captured: Record<string, unknown> | undefined;
+  registerHook("onStreamComplete", "test-onstreamcomplete-plugin", async (payload: Record<string, unknown>) => {
+    captured = payload;
+  });
+
+  await runPluginOnStreamCompleteHook({ status: 200, model: "m", provider: "p", startTime: Date.now(), requestId: "req-no-body" });
+
+  await waitFor(() => captured !== undefined);
+  assert.equal("responseBody" in captured!, false);
+});

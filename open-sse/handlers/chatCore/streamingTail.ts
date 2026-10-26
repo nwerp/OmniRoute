@@ -613,6 +613,7 @@ export async function runStreamingTail(deps: StreamingTailDeps) {
       errorCode: streamErrorCode,
       startTime,
       requestId: traceId,
+      responseBody: streamResponseBody ?? undefined,
     });
   };
 

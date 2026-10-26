@@ -16,7 +16,28 @@ export type PluginOnResponsePayload = {
   data?: unknown;
   /** True when the handler returns an SSE stream whose body is not yet available. */
   streamed?: boolean;
+  /** USD estimate of the call (`calculateCost`), when `data` carries usage. */
+  costUsd?: number;
 };
+
+/**
+ * USD estimate for a plugin payload: the same `calculateCost` the usage ledger uses, so
+ * observability plugins (trace export) report the cost the dashboard shows. Never throws.
+ */
+async function pluginCostUsd(
+  provider: string | null | undefined,
+  model: string | null | undefined,
+  usage: unknown
+): Promise<number | undefined> {
+  if (!provider || !model || !usage || typeof usage !== "object") return undefined;
+  try {
+    const { calculateCost } = await import("@/lib/usage/costCalculator");
+    const cost = await calculateCost(provider, model, usage as Record<string, unknown>);
+    return Number.isFinite(cost) ? cost : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export async function runPluginOnResponseHook(args: {
   requestId: string;
@@ -29,7 +50,10 @@ export async function runPluginOnResponseHook(args: {
 }): Promise<void> {
   try {
     const { runOnResponse } = await import("@/lib/plugins/hooks");
-    runOnResponse(
+    const usage = (args.response.data as { usage?: unknown } | undefined)?.usage;
+    // The cost lookup must not delay the response: callers await this function.
+    const costUsd = args.response.streamed ? Promise.resolve(undefined) : pluginCostUsd(args.provider, args.model, usage);
+    void costUsd.then((cost) => runOnResponse(
       {
         requestId: args.requestId,
         body: args.body,
@@ -39,8 +63,8 @@ export async function runPluginOnResponseHook(args: {
         headers: args.headers,
         metadata: {},
       },
-      args.response
-    ).catch(() => {});
+      cost === undefined ? args.response : { ...args.response, costUsd: cost }
+    ).catch(() => {}));
   } catch (_) {
     /* plugin onResponse optional */
   }
@@ -69,6 +93,10 @@ export type PluginOnStreamCompletePayload = {
   model?: string;
   provider?: string;
   errorCode?: string;
+  /** The assembled client-facing response of the stream, when chatCore built one. */
+  responseBody?: unknown;
+  /** USD estimate of the call (`calculateCost`), when usage is known. */
+  costUsd?: number;
 };
 
 /**
@@ -85,9 +113,11 @@ export async function runPluginOnStreamCompleteHook(args: {
   errorCode?: string | null | undefined;
   startTime: number;
   requestId?: string;
+  responseBody?: unknown;
 }): Promise<void> {
   try {
     const { runOnStreamComplete } = await import("@/lib/plugins/hooks");
+    const costUsd = await pluginCostUsd(args.provider, args.model, args.usage);
     runOnStreamComplete({
       status: args.status,
       requestId: args.requestId,
@@ -99,6 +129,8 @@ export async function runPluginOnStreamCompleteHook(args: {
       model: args.model ?? undefined,
       provider: args.provider ?? undefined,
       errorCode: args.errorCode ?? undefined,
+      ...(args.responseBody !== undefined ? { responseBody: args.responseBody } : {}),
+      ...(costUsd !== undefined ? { costUsd } : {}),
     }).catch(() => {});
   } catch (_) {
     /* plugin onStreamComplete optional */
