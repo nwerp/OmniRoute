@@ -240,7 +240,7 @@ export async function loadPlugin(
   }
 
   const env: Record<string, string> = {
-    ...getFilteredEnv(permissions),
+    ...getFilteredEnv(permissions, manifest.name),
     PLUGIN_ENTRY: entryPoint,
     PLUGIN_NAME: manifest.name,
   };
@@ -438,7 +438,17 @@ export async function loadPlugin(
  * Filter environment variables based on permissions.
  * Uses allowlist approach — only pass explicitly safe vars.
  */
-function getFilteredEnv(permissions: Permission[]): Record<string, string> {
+/**
+ * The env prefix a plugin with the `env` permission also receives: `OMNIROUTE_PLUGIN_`
+ * plus its name in upper snake case (`board-langfuse` → `OMNIROUTE_PLUGIN_BOARD_LANGFUSE_`).
+ * Plugin hooks get no config, so this is how a deployment hands a plugin its own settings
+ * and secrets without exposing the rest of the server env to it.
+ */
+export function pluginEnvPrefix(pluginName: string): string {
+  return `OMNIROUTE_PLUGIN_${pluginName.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_`;
+}
+
+export function getFilteredEnv(permissions: Permission[], pluginName = ""): Record<string, string> {
   // SystemRoot/windir are not optional on Windows: node aborts during
   // InitializeOncePerProcessInternal ("Assertion failed: ncrypto::CSPRNG") before
   // running any script, because its CSPRNG lives under %SystemRoot%. Without these
@@ -452,6 +462,13 @@ function getFilteredEnv(permissions: Permission[]): Record<string, string> {
 
   for (const key of allowedKeys) {
     if (process.env[key] !== undefined) env[key] = process.env[key]!;
+  }
+
+  if (pluginName && permissions.includes("env")) {
+    const prefix = pluginEnvPrefix(pluginName);
+    for (const [key, value] of Object.entries(process.env)) {
+      if (key.startsWith(prefix) && value !== undefined) env[key] = value;
+    }
   }
 
   return env;

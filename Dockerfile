@@ -295,6 +295,10 @@ ENV OMNIROUTE_MIGRATIONS_DIR=/app/migrations
 # it explicitly. The HEALTHCHECK CMD references it as `node healthcheck.mjs`.
 COPY --chown=node:node --from=builder /app/scripts/dev/healthcheck.mjs ./healthcheck.mjs
 
+# Board deployment: the Langfuse trace exporter, picked up by a plugin scan when
+# OMNIROUTE_PLUGINS_DIR=/app/bundled-plugins. Inert unless the scan runs and its env is set.
+COPY --chown=node:node examples/plugins/board-langfuse ./bundled-plugins/board-langfuse
+
 # Every COPY above hands its files to the baked-in `node` non-root user
 # (UID/GID 1000) at copy time. Do NOT add a `RUN chown -R node:node /app`
 # afterwards: in the overlay filesystem changing ownership rewrites every file
