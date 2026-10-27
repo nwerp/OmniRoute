@@ -375,7 +375,11 @@ export async function loadPlugin(
   if (manifest.hooks.onError) {
     plugin.onError = async (ctx: PluginContext, error: Error): Promise<unknown | void> => {
       try {
-        return await callHook("onError", { ctx, error: error.message });
+        // runOnError (hooks.ts) calls handlers with one merged `{ ...ctx, error }` payload, so
+        // `error` is usually undefined here: reading `.message` on it threw before any IPC.
+        const cause = error ?? (ctx as { error?: unknown }).error;
+        const message = cause instanceof Error ? cause.message : String(cause ?? "");
+        return await callHook("onError", { ctx, error: message });
       } catch (err: unknown) {
         log.error("plugin.onError_error", {
           name: manifest.name,

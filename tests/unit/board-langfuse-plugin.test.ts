@@ -168,3 +168,19 @@ test("calls that never finish are evicted by the size cap instead of piling up",
   plugin.onResponse({ requestId: "stuck-59", response: { status: 200, data: {} } });
   assert.equal(calls.length, 1);
 });
+
+test("hooks accept the payload shape the loader's IPC proxy actually delivers", () => {
+  // runOnResponse → handler({ ...ctx, response }) → proxy sends { ctx: <that>, response: undefined }
+  plugin.onRequest({ requestId: "ipc1", body: { messages: [] }, apiKeyInfo: { name: "k" } });
+  plugin.onResponse({
+    ctx: { requestId: "ipc1", response: { status: 200, data: { content: [{ text: "ok" }] } } },
+    response: undefined,
+  });
+  assert.equal(calls.length, 1);
+  assert.match(attrs(calls[0])["langfuse.observation.output"], /ok/);
+
+  // runOnError → handler({ ...ctx, error }) → proxy sends { ctx, error: message }
+  plugin.onRequest({ requestId: "ipc2", body: { messages: [] }, apiKeyInfo: { name: "k" } });
+  plugin.onError({ ctx: { requestId: "ipc2" }, error: "bad request body" });
+  assert.equal(attrs(calls[1])["langfuse.observation.status_message"], "bad request body");
+});

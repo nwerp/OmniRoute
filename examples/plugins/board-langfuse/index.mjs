@@ -191,6 +191,19 @@ function send(entry, result) {
     .catch((err) => console.error(`[board-langfuse] export failed: ${err?.message || err}`));
 }
 
+/**
+ * The host calls every hook with one payload (`{ ...ctx, response }`, `{ ...ctx, error }`), and the
+ * loader's IPC proxy wraps the blocking ones as `{ ctx, response }` / `{ ctx, error: message }`.
+ * Returns the flat context either way.
+ */
+export function unwrap(arg) {
+  if (!arg || typeof arg !== "object" || !arg.ctx || typeof arg.ctx !== "object") return arg;
+  const flat = { ...arg.ctx };
+  if (arg.response !== undefined) flat.response = arg.response;
+  if (typeof arg.error === "string") flat.errorMessage = arg.error;
+  return flat;
+}
+
 function take(requestId) {
   const entry = pending.get(requestId);
   if (entry) drop(requestId, entry);
@@ -220,7 +233,8 @@ export function onRequest(ctx) {
   prune(now);
 }
 
-export function onResponse(ctx) {
+export function onResponse(arg) {
+  const ctx = unwrap(arg);
   const response = ctx?.response;
   // A stream finishes in onStreamComplete, which carries the assembled body.
   if (!ctx?.requestId || response?.streamed) return;
@@ -250,12 +264,13 @@ export function onStreamComplete(event) {
   });
 }
 
-export function onError(ctx) {
+export function onError(arg) {
+  const ctx = unwrap(arg);
   const entry = ctx?.requestId ? take(ctx.requestId) : undefined;
   if (!entry) return;
   send(entry, {
     endMs: Date.now(),
     status: num(ctx.error?.status) ?? 500,
-    error: ctx.error?.message || "error",
+    error: ctx.errorMessage || ctx.error?.message || "error",
   });
 }
